@@ -16,6 +16,19 @@ August 11, 2021
 
 ## Load libraries
 
+``` r
+library(ggalluvial)
+library(dplyr)
+library(readr)
+library(stringr)
+library(ggplot2)
+library(alluvial)
+library(scales)
+library(cowplot)
+library(tidyr)
+library(eulerr)
+```
+
 ## load data
 
 ``` r
@@ -290,7 +303,7 @@ list
     ## [85] "Vigun11g097600" "Vigun11g097800" "Vigun11g110200" "Vigun11g162800"
     ## [89] "Vigun11g192800"
 
-### Generate lists to generate boxplots
+### Generate lists of genes to call log2FC values for boxplots
 
 ``` r
 #1 hour
@@ -344,17 +357,6 @@ set2 <- deseq_input %>%
   filter(n()==numcomp) #only keep if gene occurs twice e.g. not sig at either 1 hr or 6 hr
 list2 <- intersect(c(set2$gene),c(set2$gene))
 
-##inceptin-specific
-numcomp <- 3
-comp1 <- "H1U1"
-comp2 <- "H6U1"
-comp3 <- "I1H1"
-set2_rrf <- deseq_input %>%
-  filter((comp==comp1 & class!=1) | (comp==comp2) | (comp==comp3 & class==1)) %>%
-  group_by(gene) %>%
-  filter(n()==numcomp) #only keep if gene occurs twice e.g. not sig at either 1 hr or 6 hr
-list2_rrf <- intersect(c(set2$gene),c(set2$gene))
-
 ##inceptin-accelerated
 numcomp <- 3
 comp1 <- "H6U1"
@@ -374,7 +376,7 @@ set33 <- deseq_input %>%
   filter((comp==comp1 & class==-1) | (comp==comp2 & class==1) | (comp==comp3 & class==1)) %>%
   group_by(gene) %>%
   filter(n()==numcomp) #only keep if gene occurs twice e.g. not sig at either 1 hr or 6 hr
-list33 <- intersect(c(set33$gene),c(set33$gene))
+list_rev <- intersect(c(set33$gene),c(set33$gene))
 
 #non duplicated overlaps
 onehr <- list0_1 %>% union(list1) %>% union(list2) %>% union(list3)
@@ -387,10 +389,8 @@ specific1 <- deseq_input %>% filter(gene %in% onehr& comp %in% comp_list) %>%
   mutate(color=case_when(gene %in% list2 ~ "specific"),log2=case_when(gene %in% list2 ~ log2FoldChange)) %>% filter(color=="specific")
 accelerate1 <- deseq_input %>% filter(gene %in% onehr& comp %in% comp_list) %>% 
   mutate(color=case_when(gene %in% list3 ~ "accelerate"),log2=case_when(gene %in% list3 ~ log2FoldChange))%>% filter(color=="accelerate") 
-specific1_rrf <- deseq_input %>% filter(comp %in% comp_list) %>% 
-  mutate(color=case_when(gene %in% list2_rrf ~ "specific"),log2=case_when(gene %in% list2 ~ log2FoldChange)) %>% filter(color=="specific")
 
-reversed1 <- deseq_input %>% filter(gene %in% onehr& comp %in% comp_list) %>% mutate(color=case_when(gene %in% list33 ~ "reversed"),log2=case_when(gene %in% list33 ~ log2FoldChange))%>% filter(color=="reversed")
+reversed1 <- deseq_input %>% filter(gene %in% onehr& comp %in% comp_list) %>% mutate(color=case_when(gene %in% list_rev ~ "reversed"),log2=case_when(gene %in% list_rev ~ log2FoldChange))%>% filter(color=="reversed")
 ```
 
 ### Generate Figs. 2A-C, 1 hr plots
@@ -520,10 +520,10 @@ set7 <- deseq_input %>%
   filter((comp==comp1 & class==-1) | (comp==comp2 & class==1) | (comp==comp3 & class==1)) %>%
   group_by(gene) %>%
   filter(n()==numcomp) #only keep if gene occurs twice e.g. not sig at either 1 hr or 6 hr
-list7 <- intersect(c(set7$gene),c(set7$gene))
+list_reverse_6 <- intersect(c(set7$gene),c(set7$gene))
 
 comp_list <- c("H1U1","I1U1","H6U1","I6U1")
-reversed6 <- deseq_input %>% filter(gene %in% list35_1 & comp %in% comp_list) %>% mutate(color=case_when(gene %in% list7 ~ "reversed"),log2=case_when(gene %in% list7 ~ log2FoldChange))%>% filter(color=="reversed")
+reversed6 <- deseq_input %>% filter(gene %in% list35_1 & comp %in% comp_list) %>% mutate(color=case_when(gene %in% list_reverse_6 ~ "reversed"),log2=case_when(gene %in% list_reverse_6 ~ log2FoldChange))%>% filter(color=="reversed")
 ```
 
 ### Figs. 2E-G, 6 hr plots
@@ -732,7 +732,7 @@ names(I6H6)[2]<-"I6H6_log2FC"
 FCs <- H1U1 %>% left_join(I1U1,by="gene") %>% left_join(I1H1,by="gene") %>% left_join(H6U1,by="gene") %>% left_join(I6U1,by="gene") %>% left_join(I6H6,by="gene")
 ```
 
-\#write lists
+### write gene lists for supplementary tables
 
 ``` r
 contrastdf1 <- data.frame(contrastset1)
@@ -862,7 +862,12 @@ venn_up <- plot(euler_data_up,
      #edges = FALSE,
      fontsize = 16,
      quantities = list(fontsize = 16))
+venn_up
+```
 
+![](210811_knitted_scripts_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
+
+``` r
 ggsave("boxplots/venn_up.png",venn_up,width=4,height=3)
 ```
 
@@ -1421,9 +1426,72 @@ cowpea_total <- full_join(merge,negmerge)
 
 ``` r
 write_csv(cowpea_total,"boxplots/cowpea_venn.csv",na="")
+head(cowpea_total,10)
+```
 
+    ##              gene sixhr_dmg       in_6_subset
+    ## 1  Vigun01g005700         *              <NA>
+    ## 2  Vigun01g005800         *              <NA>
+    ## 3  Vigun01g007800         *              <NA>
+    ## 4  Vigun01g008100         *              <NA>
+    ## 5  Vigun01g008600         *              <NA>
+    ## 6  Vigun01g008900         *              <NA>
+    ## 7  Vigun01g010300         *              <NA>
+    ## 8  Vigun01g010600         * 6 hr In-amplified
+    ## 9  Vigun01g011200         *              <NA>
+    ## 10 Vigun01g012000         *              <NA>
+    ##                                                          arabi-defline
+    ## 1                                        UDP-glucosyl transferase 88A1
+    ## 2                                        UDP-glucosyl transferase 88A1
+    ## 3                      Eukaryotic protein of unknown function (DUF842)
+    ## 4  Plant invertase/pectin methylesterase inhibitor superfamily protein
+    ## 5                                                       SKU5 similar 1
+    ## 6       Haloacid dehalogenase-like hydrolase (HAD) superfamily protein
+    ## 7                                Major facilitator superfamily protein
+    ## 8          NmrA-like negative transcriptional regulator family protein
+    ## 9                                               ribosomal protein L16B
+    ## 10                    Ribosomal RNA adenine dimethylase family protein
+    ##      baseMean H1U1_log2FC I1U1_log2FC I1H1_log2FC H6U1_log2FC I6U1_log2FC
+    ## 1   46.885477   0.1197373 -0.01968952  -0.1394268    2.410675    2.977864
+    ## 2    5.416560  -0.4963258 -1.79342116  -1.2970953    3.633586    4.379877
+    ## 3   34.830131  -0.9511288 -0.43028035   0.5208485    1.249312    1.564249
+    ## 4  662.569450   3.0270046  3.42492583   0.3979213    4.486733    5.018635
+    ## 5   14.248444   0.1045629 -0.10839341  -0.2129564    1.538048    1.237098
+    ## 6   22.657624   2.9679034  3.71501570   0.7471123    1.851643    2.473916
+    ## 7    5.396598   1.4995376  2.59385326   1.0943156    5.097806    6.610249
+    ## 8   78.943543  -0.4735880  3.16650233   3.6400903    6.000980    8.777207
+    ## 9  646.751792  -0.5967567  0.51341968   1.1101764    1.200280    1.761553
+    ## 10  66.949877   0.2418540  0.97676803   0.7349141    1.118308    1.909318
+    ##    I6H6_log2FC onehr_dmg         in_1_subset D_sixhr_dmg D_in_6_subset
+    ## 1    0.5671896      <NA>                <NA>        <NA>          <NA>
+    ## 2    0.7462913      <NA>                <NA>        <NA>          <NA>
+    ## 3    0.3149365      <NA>                <NA>        <NA>          <NA>
+    ## 4    0.5319027         *                <NA>        <NA>          <NA>
+    ## 5   -0.3009491      <NA>                <NA>        <NA>          <NA>
+    ## 6    0.6222729         *                <NA>        <NA>          <NA>
+    ## 7    1.5124432      <NA>                <NA>        <NA>          <NA>
+    ## 8    2.7762267      <NA> 1 hr In-accelerated        <NA>          <NA>
+    ## 9    0.5612731      <NA> 1 hr In-accelerated        <NA>          <NA>
+    ## 10   0.7910097      <NA>                <NA>        <NA>          <NA>
+    ##    D_onehr_dmg D_in_1_subset
+    ## 1         <NA>          <NA>
+    ## 2         <NA>          <NA>
+    ## 3         <NA>          <NA>
+    ## 4         <NA>          <NA>
+    ## 5         <NA>          <NA>
+    ## 6         <NA>          <NA>
+    ## 7         <NA>          <NA>
+    ## 8         <NA>          <NA>
+    ## 9         <NA>          <NA>
+    ## 10        <NA>          <NA>
+
+``` r
 FCs_new <- FCs %>% left_join(annotations,by="gene") %>% left_join(cowpea_total,by="gene")
+```
 
+### Supp tables: gene family specific lists using csv files containing genes of interest (eg POX, TPS).
+
+``` r
 #write gene family specific lists
 POX_final <- read_csv("C:/Users/adams/Dropbox/00_UCSD/manuscript/transcriptome/Fig2/POX_final.csv",col_names = FALSE)
 ```
@@ -1551,7 +1619,35 @@ WRKY_list <- as.list(WRKY_final$X1)
 WRKY_total <- FCs_new %>% filter(gene %in% WRKY_list)
 write_csv(WRKY_total,"boxplots/cowpea_wrky.csv",na="")
 
+WRKY_total
+```
+
+    ## # A tibble: 51 x 25
+    ##    gene           baseMean.x H1U1_log2FC.x I1U1_log2FC.x I1H1_log2FC.x H6U1_log2FC.x
+    ##    <chr>               <dbl>         <dbl>         <dbl>         <dbl>         <dbl>
+    ##  1 Vigun01g006200      39.5          0.120       -0.0771       -0.197          0.925
+    ##  2 Vigun01g071800      14.3          1.32         1.65          0.321          2.30 
+    ##  3 Vigun01g156000       3.16         0.361        0.297        -0.0638        -1.13 
+    ##  4 Vigun01g198600      46.3          3.57         3.97          0.399          4.22 
+    ##  5 Vigun01g202800       4.68         0.162        0.227         0.0645        -0.149
+    ##  6 Vigun02g055200      16.7          1.25         0.398        -0.848          0.516
+    ##  7 Vigun02g063800       0           NA           NA            NA             NA    
+    ##  8 Vigun02g146400     132.           2.02         2.30          0.275          0.370
+    ##  9 Vigun03g048500       9.93         3.33         6.71          3.38           4.68 
+    ## 10 Vigun03g138300       4.98         0.103       -0.130        -0.232          0.266
+    ## # ... with 41 more rows, and 19 more variables: I6U1_log2FC.x <dbl>,
+    ## #   I6H6_log2FC.x <dbl>, arabi-defline.x <chr>, sixhr_dmg <chr>,
+    ## #   in_6_subset <chr>, arabi-defline.y <chr>, baseMean.y <dbl>,
+    ## #   H1U1_log2FC.y <dbl>, I1U1_log2FC.y <dbl>, I1H1_log2FC.y <dbl>,
+    ## #   H6U1_log2FC.y <dbl>, I6U1_log2FC.y <dbl>, I6H6_log2FC.y <dbl>,
+    ## #   onehr_dmg <chr>, in_1_subset <chr>, D_sixhr_dmg <chr>, D_in_6_subset <chr>,
+    ## #   D_onehr_dmg <chr>, D_in_1_subset <chr>
+
+### euler diagram for downregulated genes
+
+``` r
 #ALL genes in the special categories at 1 hr
+
 overlap_all <- intersect(list0_1,list35_1)
 amplified_overlap <- intersect(list1,list4)
 prolong_accel_overlap <- intersect(list3,list6)
@@ -1572,33 +1668,23 @@ k <- plot(fit,
 k
 ```
 
-![](210811_knitted_scripts_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
+![](210811_knitted_scripts_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
 
-``` r
-fit2 <- euler(c(B=length(list1)-length(amplified_overlap),G=length(list4)-length(amplified_overlap),"B&G"=length(amplified_overlap)))
-l <- plot(fit2,
-     fills = c(negcolor1,negcolor4),
-     #edges = FALSE,
-     fontsize = 16,
-     quantities = list(fontsize = 16))
-l
-```
-
-![](210811_knitted_scripts_files/figure-gfm/unnamed-chunk-20-2.png)<!-- -->
+#### you can also do this for only a subset of genes that fit certain critera
 
 ``` r
 fit3 <- euler(c(C=length(list2)-length(specific_overlap),H=length(list5)-length(specific_overlap),"C&H"=length(specific_overlap)))
-m <- plot(fit3,
+specific_only_overlap <- plot(fit3,
      fills = c(negcolor2,negcolor5),
      #edges = FALSE,
      fontsize = 16,
      quantities = list(fontsize = 16))
-m
+specific_only_overlap
 ```
 
-![](210811_knitted_scripts_files/figure-gfm/unnamed-chunk-20-3.png)<!-- -->
+![](210811_knitted_scripts_files/figure-gfm/unnamed-chunk-23-1.png)<!-- -->
 
-### Generate count vs count plots, Fig. S4
+### Fig S4: count vs count plots
 
 ``` r
 counts1 <- mutate(counts, color=
@@ -1632,7 +1718,7 @@ plot_grid(e,j, labels = "AUTO", ncol=2)
 
     ## Warning: Removed 7 rows containing missing values (geom_point).
 
-![](210811_knitted_scripts_files/figure-gfm/unnamed-chunk-21-1.png)<!-- -->
+![](210811_knitted_scripts_files/figure-gfm/unnamed-chunk-24-1.png)<!-- -->
 
 ``` r
 ggsave("boxplots/venn_down.png",k,width=4,height=3)
@@ -1678,7 +1764,7 @@ figure_down_new_row2 <- plot_grid(g,h,i,j,labels=c("E","F","G","H"),ncol=4,rel_w
 ggsave("boxplots/fig1neg_new_row2.png",figure_down_new_row2,width=15,height=3.75)
 ```
 
-### Output counts file for ggtree
+### Output counts file for downstream data visualization in ggtree
 
 ``` r
 counts <- mutate(counts, 
@@ -1751,7 +1837,7 @@ volcano1
 
     ## Warning: Removed 11783 rows containing missing values (geom_point).
 
-![](210811_knitted_scripts_files/figure-gfm/unnamed-chunk-23-1.png)<!-- -->
+![](210811_knitted_scripts_files/figure-gfm/unnamed-chunk-26-1.png)<!-- -->
 
 ``` r
 volcano1_sub
@@ -1761,7 +1847,7 @@ volcano1_sub
 
     ## Warning: Removed 11804 rows containing missing values (geom_point).
 
-![](210811_knitted_scripts_files/figure-gfm/unnamed-chunk-23-2.png)<!-- -->
+![](210811_knitted_scripts_files/figure-gfm/unnamed-chunk-26-2.png)<!-- -->
 
 ``` r
   #scale_color_manual(values = c(color2,color1,color0,color3,negcolor3,negcolor0,negcolor2,"grey82"))
@@ -1784,7 +1870,7 @@ volcano6
 
     ## Warning: Removed 11298 rows containing missing values (geom_point).
 
-![](210811_knitted_scripts_files/figure-gfm/unnamed-chunk-23-3.png)<!-- -->
+![](210811_knitted_scripts_files/figure-gfm/unnamed-chunk-26-3.png)<!-- -->
 
 ``` r
 volcano6_sub
@@ -1794,7 +1880,7 @@ volcano6_sub
 
     ## Warning: Removed 11325 rows containing missing values (geom_point).
 
-![](210811_knitted_scripts_files/figure-gfm/unnamed-chunk-23-4.png)<!-- -->
+![](210811_knitted_scripts_files/figure-gfm/unnamed-chunk-26-4.png)<!-- -->
 
 ``` r
 volcano1_fig <- plot_grid(volcano1,volcano1_sub)
