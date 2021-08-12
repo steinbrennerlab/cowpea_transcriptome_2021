@@ -339,7 +339,7 @@ library(stringr)
 all$gene <- str_sub(all$gene,end=-6)
 
 #csv output
-write.csv(all,file="deseq/DESeq_allcomps_alluv.csv")
+write.csv(all,file="deseq/DESeq_allcomps.csv")
 ```
 
 ## A final human-readable output is all DESeq comparisons organized by gene, rather than tidy format

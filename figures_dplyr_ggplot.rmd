@@ -38,7 +38,7 @@ library(stringr)
 ```{r}
 #Load DESeq output
 setwd("C:/Users/Adams/Dropbox/00_UCSD/UW/github/cowpea_transcriptome_2021")
-deseq_input <- read_csv("deseq/DESeq_allcomps_alluv.csv", show_col_types = FALSE)
+deseq_input <- read_csv("deseq/DESeq_allcomps.csv", show_col_types = FALSE)
 
 #Load cowpea gene annotations
 annotations <- read_csv("input_annotations.csv", show_col_types = FALSE)

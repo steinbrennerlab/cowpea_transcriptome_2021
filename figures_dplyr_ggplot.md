@@ -35,7 +35,7 @@ library(stringr)
 ``` r
 #Load DESeq output
 setwd("C:/Users/Adams/Dropbox/00_UCSD/UW/github/cowpea_transcriptome_2021")
-deseq_input <- read_csv("deseq/DESeq_allcomps_alluv.csv", show_col_types = FALSE)
+deseq_input <- read_csv("deseq/DESeq_allcomps.csv", show_col_types = FALSE)
 ```
 
     ## New names:
@@ -915,9 +915,23 @@ counts <- mutate(counts,
                  )
 
 panel_d <- ggplot(counts1) + boxplot_theme + aes(y=I1,x=H1,col=color,alpha=trans) + geom_point() + ylab(paste("log2(counts)","\n", "W + In 1 hr")) + xlab("log2(counts), Wound 1 hr") + ylim(c(-4,15)) + xlim(c(-4,15)) +  geom_abline(intercept = 0, slope = 1) + scale_color_manual(values = c(color1,color2,color3,color7))
+panel_d
+```
 
+    ## Warning: Removed 13 rows containing missing values (geom_point).
+
+![](figures_dplyr_ggplot_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
+
+``` r
 panel_h <- ggplot(counts6) + boxplot_theme + aes(y=I6,x=H6,col=color,alpha=trans) + geom_point() + ylab(paste("log2(counts)","\n", "W + In 6 hr")) + xlab("log2(counts), Wound 6 hr") + ylim(c(-4,15)) + xlim(c(-4,15)) +  geom_abline(intercept = 0, slope = 1)  + scale_color_manual(values = c(color4,color5,color6,color7))
+panel_h
+```
 
+    ## Warning: Removed 7 rows containing missing values (geom_point).
+
+![](figures_dplyr_ggplot_files/figure-gfm/unnamed-chunk-16-2.png)<!-- -->
+
+``` r
 figure_up_new_row1 <- plot_grid(panel_a,panel_b,panel_c,panel_d,labels=c("A","B","C","D"),ncol=4,rel_widths=c(11,11,18,15.8),label_size=boxplot_font_size)
 ```
 
