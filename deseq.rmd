@@ -1,0 +1,258 @@
+---
+title: "DESeq Analysis for cowpea 2021 manuscript"
+author: Adam Steinbrenner
+date: August 11, 2021
+output: github_document
+---
+
+## Install packages
+```
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("DESeq2")
+```
+
+## Open libraries
+```{r, message=FALSE}
+library(DESeq2)
+library(dplyr)
+library(gplots)
+library(RColorBrewer)
+library(stringr)
+```
+
+
+## Load htseq counts data
+```{r}
+setwd("C:/Users/Adams/Dropbox/00_UCSD/UW/github/cowpea_transcriptome_2021")
+
+#input data
+countdata <- read.table("input_combined_counts.csv", header=TRUE,sep=",",row.names = 1)
+```
+
+
+## Format data and set conditions by column
+```{r}
+countdata <- as.matrix(countdata)
+head(countdata)
+colnames(countdata)
+
+#set conditions for each set of columns
+(condition <- factor(c(
+ rep("H1",4),
+ rep("H6",4),
+ rep("I1",4),
+ rep("I6",4),
+ rep("U1",4)
+ )
+ )
+ )
+```
+
+## DESeq functions
+
+
+```{r}
+(coldata <- data.frame(row.names=colnames(countdata), condition))
+dds <- DESeqDataSetFromMatrix(countData=countdata, colData=coldata, design=~condition)
+dds 
+
+dds <- DESeq(dds)
+```
+
+#Dispersion plots, heatmap of samples, and PCA
+```{r}
+plotDispEsts(dds, main="Dispersion plot")
+rld <- rlogTransformation(dds)
+head(assay(rld))
+hist(assay(rld))
+
+(mycols <- brewer.pal(8, "Dark2")[1:length(unique(condition))])
+
+sampleDists <- as.matrix(dist(t(assay(rld))))
+
+#heatmap
+heatmap.2(as.matrix(sampleDists), key=F, trace="none",
+          col=colorpanel(100, "black", "white"),
+          ColSideColors=mycols[condition], RowSideColors=mycols[condition],
+          margin=c(10, 10), main="Sample Distance Matrix")
+
+png("deseq/qc-heatmap-samples.png", w=1000, h=1000, pointsize=20)
+heatmap.2(as.matrix(sampleDists), key=F, trace="none",
+          col=colorpanel(100, "black", "white"),
+          ColSideColors=mycols[condition], RowSideColors=mycols[condition],
+          margin=c(10, 10), main="Sample Distance Matrix")
+dev.off()
+
+#PCA plot
+DESeq2::plotPCA(rld, intgroup="condition")
+png("deseq/pca.png")
+DESeq2::plotPCA(rld, intgroup="condition")
+dev.off()
+```
+
+## write normalized and log2-corrected counts files
+```{r}
+#write.csv(resdata, file="diffexpr-results.csv")
+counts<-as.data.frame(counts(dds, normalized=TRUE))
+counts[counts==0]<-0.1
+write.csv(counts,file="deseq/counts.csv")
+
+log2counts <- log2(counts)
+write.csv(log2counts,file="deseq/log2counts.csv")
+
+avglog2 <- log2counts %>% mutate(U1 = rowMeans(select(., starts_with("U1")), na.rm = TRUE)) %>% mutate(H1 = rowMeans(select(., starts_with("H1")), na.rm = TRUE)) %>% mutate(H6 = rowMeans(select(., starts_with("H6")), na.rm = TRUE)) %>% mutate(I1 = rowMeans(select(., starts_with("I1")), na.rm = TRUE)) %>% mutate(I6 = rowMeans(select(., starts_with("I6")), na.rm = TRUE)) %>% select(21:25)
+#rownames(avglog2) <- str_sub(all$gene,end=-6)
+
+rownames(avglog2) <- str_sub(rownames(avglog2),end=-6)
+avglog2 <- cbind(rownames(avglog2), data.frame(avglog2, row.names=NULL))
+colnames(avglog2)[1] <- "gene"
+write.csv(avglog2,file="deseq/counts_avg_log2.csv",row.names=FALSE)
+```
+
+### For differential comparisons, add contrast option to a DEseq2 object (dds). Specify using contrast=c(*name of column with conditions*,*denominator*,*numerator*)
+```{r}
+resI1H1 <- data.frame(results(dds, contrast=c("condition","I1","H1")))
+resI6H6 <- data.frame(results(dds, contrast=c("condition","I6","H6")))
+resI6I1 <- data.frame(results(dds, contrast=c("condition","I6","I1")))
+resH6H1 <- data.frame(results(dds, contrast=c("condition","H6","H1")))
+resH1U1 <- data.frame(results(dds, contrast=c("condition","H1","U1")))
+resI1U1 <- data.frame(results(dds, contrast=c("condition","I1","U1")))
+resH6U1 <- data.frame(results(dds, contrast=c("condition","H6","U1")))
+resI6U1 <- data.frame(results(dds, contrast=c("condition","I6","U1")))
+
+resI1H1$gene<-rownames(resI1H1)
+resI6H6$gene<-rownames(resI6H6)
+resI6I1$gene<-rownames(resI6I1)
+resH6H1$gene<-rownames(resH6H1)
+resH1U1$gene<-rownames(resH1U1)
+resI1U1$gene<-rownames(resI1U1)
+resH6U1$gene<-rownames(resH6U1)
+resI6U1$gene<-rownames(resI6U1)
+```
+
+## Use dplyr to filter by significance and write log2 count for only genes with a significant DE. Then merge dataframes and export
+```{r}
+dfs <- list(resH1U1,resI1U1,resH6U1,resI6U1)
+allDE <- bind_rows(dfs,.id=NULL) %>% filter(padj<0.05) %>% distinct(gene)
+log2counts$gene <- rownames(log2counts)
+DE_log2_norm_counts <- left_join(allDE,log2counts,by="gene")
+library(readr)
+write_csv(DE_log2_norm_counts,"deseq/DE_log2_norm_counts.csv")
+```
+
+## Calculate average counts to generate heatmap
+```{r}
+positions<-c(23:26)
+DE_log2_avg <- DE_log2_norm_counts %>% rowwise() %>% mutate(Undamaged=mean(c(U11,U12,U13,U14))) %>% mutate(Damage_1hr=mean(c(H11,H12,H13,H14))-Undamaged) %>% mutate(DamageInceptin_1hr=mean(c(I11,I12,I13,I14))-Undamaged) %>% mutate(Damage_6hr=mean(c(H61,H62,H63,H64))-Undamaged) %>%  mutate(DamageInceptin_6hr=mean(c(I61,I62,I63,I64))-Undamaged) %>% select(all_of(positions))
+
+heatmap <- as.matrix(DE_log2_avg)
+
+
+row.hc <- hclust(dist(heatmap))
+row.dd <- as.dendrogram(row.hc)
+
+
+png("deseq/heatmap.png", w=600, h=1000, pointsize=20)
+heatmap.2(heatmap, Rowv=row.dd, col = colorRampPalette(c('blue1','blue2','blue3','blue4','black','green4','green3','green2','green1'))(20), scale="none", key=T, keysize=1.5,density.info="none", trace="none",cexCol=0.6, labRow=NA)
+dev.off()
+
+pdf("deseq/heatmap.pdf")
+heatmap.2(heatmap, Rowv=row.dd, col = colorRampPalette(c('blue1','blue2','blue3','blue4','black','green4','green3','green2','green1'))(20), scale="none", key=T, keysize=1.5,density.info="none", trace="none",cexCol=0.6, labRow=NA)
+dev.off()
+
+```
+
+## Create a tidy output for dplyr analysis and boxplot scripts
+```{r}
+
+resI1H1$comp<-"I1H1"
+resI6H6$comp<-"I6H6"
+resI6I1$comp<-"I6I1"
+resH6H1$comp<-"H6H1"
+resH1U1$comp<-"H1U1"
+resI1U1$comp<-"I1U1"
+resH6U1$comp<-"H6U1"
+resI6U1$comp<-"I6U1"
+
+resI1H1 <- mutate(resI1H1,id=row_number())
+resI6H6 <- mutate(resI6H6,id=row_number())
+resI6I1 <- mutate(resI6I1,id=row_number())
+resH6H1 <- mutate(resH6H1,id=row_number())
+resH1U1 <- mutate(resH1U1,id=row_number())
+resI1U1 <- mutate(resI1U1,id=row_number())
+resH6U1 <- mutate(resH6U1,id=row_number())
+resI6U1 <- mutate(resI6U1,id=row_number())
+
+dfs <- list(resI1H1,resI6H6,resI6I1,resH6H1,resH1U1,resI1U1,resH6U1,resI6U1)
+
+all <- bind_rows(dfs,.id=NULL)
+all <- bind_rows(dfs)
+library(stringr)
+#rename all rows as genes rather than transcripts
+all$gene <- str_sub(all$gene,end=-6)
+
+#csv output
+write.csv(all,file="deseq/DESeq_allcomps_alluv.csv")
+```
+
+
+## A final human-readable output is all DESeq comparisons organized by gene, rather than tidy format
+```{r}
+#rename column headers with the exact comparison used
+resI1H1 <- data.frame(results(dds, contrast=c("condition","I1","H1")))
+resI6H6 <- data.frame(results(dds, contrast=c("condition","I6","H6")))
+resI6I1 <- data.frame(results(dds, contrast=c("condition","I6","I1")))
+resH6H1 <- data.frame(results(dds, contrast=c("condition","H6","H1")))
+resH1U1 <- data.frame(results(dds, contrast=c("condition","H1","U1")))
+resI1U1 <- data.frame(results(dds, contrast=c("condition","I1","U1")))
+resH6U1 <- data.frame(results(dds, contrast=c("condition","H6","U1")))
+resI6U1 <- data.frame(results(dds, contrast=c("condition","I6","U1")))
+
+colnames(resI1H1)<-paste("I1H1",colnames(resI1H1))
+colnames(resI6H6)<-paste("I6H6",colnames(resI6H6))
+colnames(resI6I1)<-paste("I6I1",colnames(resI6I1))
+colnames(resH6H1)<-paste("H6H1",colnames(resH6H1))
+colnames(resH1U1)<-paste("H1U1",colnames(resH1U1))
+colnames(resI1U1)<-paste("I1U1",colnames(resI1U1))
+colnames(resH6U1)<-paste("H6U1",colnames(resH6U1))
+colnames(resI6U1)<-paste("I6U1",colnames(resI6U1))
+
+
+resI1H1$gene<-rownames(resI1H1)
+resI6H6$gene<-rownames(resI6H6)
+resI6I1$gene<-rownames(resI6I1)
+resH6H1$gene<-rownames(resH6H1)
+resH1U1$gene<-rownames(resH1U1)
+resI1U1$gene<-rownames(resI1U1)
+resH6U1$gene<-rownames(resH6U1)
+resI6U1$gene<-rownames(resI6U1)
+
+
+
+resI1H1$comp<-"I1H1"
+resI6H6$comp<-"I6H6"
+resI6I1$comp<-"I6I1"
+resH6H1$comp<-"H6H1"
+resH1U1$comp<-"H1U1"
+resI1U1$comp<-"I1U1"
+resH6U1$comp<-"H6U1"
+resI6U1$comp<-"I6U1"
+
+#write row number
+resI1H1 <- mutate(resI1H1,id=row_number())
+resI6H6 <- mutate(resI6H6,id=row_number())
+resI6I1 <- mutate(resI6I1,id=row_number())
+resH6H1 <- mutate(resH6H1,id=row_number())
+resH1U1 <- mutate(resH1U1,id=row_number())
+resI1U1 <- mutate(resI1U1,id=row_number())
+resH6U1 <- mutate(resH6U1,id=row_number())
+resI6U1 <- mutate(resI6U1,id=row_number())
+
+dfs <- list(resI1H1,resI6H6,resI6I1,resH6H1,resH1U1,resI1U1,resH6U1,resI6U1)
+
+all <- bind_rows(dfs,.id=NULL)
+all <- bind_rows(dfs)
+output <- Reduce(function(x, y) merge(x, y, all=TRUE,by="gene"), dfs)
+write.csv(output, file="deseq/deseqResults_bygene.csv")
+```
